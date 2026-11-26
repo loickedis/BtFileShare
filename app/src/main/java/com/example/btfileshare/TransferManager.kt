@@ -6,13 +6,8 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
-import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
-import android.webkit.MimeTypeMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,8 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedOutputStream
 import java.io.BufferedReader
-import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -116,7 +109,7 @@ class TransferManager(
                     onStatus("Taille de fichier invalide")
                     return
                 }
-                val output = openOutput(fileName) ?: run {
+                val output = FileSaver.openOutputStream(context, fileName) ?: run {
                     onStatus("Impossible d'enregistrer le fichier")
                     return
                 }
@@ -165,40 +158,7 @@ class TransferManager(
         }
     }
 
-    private fun openOutput(fileName: String): OutputStream? {
-        return if (Build.VERSION.SDK_INT >= 29) {
-            val values = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, mimeTypeFor(fileName))
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-            }
-            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                ?: return null
-            context.contentResolver.openOutputStream(uri)
-        } else {
-            @Suppress("DEPRECATION")
-            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                ?: return null
-            dir.mkdirs()
-            var file = File(dir, fileName)
-            if (file.exists()) {
-                val base = fileName.substringBeforeLast('.')
-                val ext = fileName.substringAfterLast('.', "")
-                file = File(dir, "$base-${System.currentTimeMillis()}${if (ext.isEmpty()) "" else ".$ext"}")
-            }
-            FileOutputStream(file)
-        }
-    }
-
-    private fun mimeTypeFor(fileName: String): String {
-        val ext = MimeTypeMap.getFileExtensionFromUrl(fileName).lowercase()
-        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
-    }
-
-    private fun sanitizeFileName(name: String): String {
-        val cleaned = name.replace(Regex("[/\\\\]"), "_").trim()
-        return cleaned.ifEmpty { "fichier-${System.currentTimeMillis()}" }
-    }
+    private fun sanitizeFileName(name: String): String = FileSaver.sanitizeFileName(name)
 
     companion object {
         val APP_UUID: UUID = UUID.fromString("8ce255c0-200a-11e0-ac64-0800200c9a66")

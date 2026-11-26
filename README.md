@@ -29,6 +29,8 @@ BtFileShare/
 │       │   ├── DeviceScanner.kt       découverte classic + BLE (détection Apple)
 │       │   ├── TransferManager.kt     serveur/client RFCOMM, protocole, MediaStore
 │       │   ├── DeviceAdapter.kt       liste des appareils
+│       │   ├── FileSaver.kt           enregistrement dans Téléchargements (MediaStore)
+│       │   ├── WifiShareServer.kt     serveur HTTP local + page web (mode iPhone)
 │       │   └── DeviceInfo.kt          modèle + heuristique Apple
 │       └── res/
 ├── build.gradle
@@ -55,7 +57,22 @@ gradle assembleDebug
 ```
 L'APK sort dans `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Utilisation (sur les 2 téléphones Android)
+## Mode Wi-Fi / iPhone (v2, sans internet)
+
+Transfère aussi avec un **iPhone**, sans app à installer et **sans internet** :
+l'Android crée son point d'accès mobile (ou les deux sont sur le même Wi-Fi),
+l'iPhone ouvre le lien via le QR code — la communication reste 100 % locale.
+
+1. Côté Android : **Ajouter au partage** (fichiers à proposer) → **Wi-Fi / iPhone**
+2. Active le **point d'accès mobile** Android (Réglages → Point d'accès) ou le même Wi-Fi que l'iPhone
+3. L'app affiche un **QR code** : sur l'iPhone, ouvre l'appareil photo, vise le QR code, ouvre le lien dans **Safari**
+4. La page web permet de **télécharger** les fichiers partagés et d'**envoyer** des fichiers vers l'Android
+
+⚠️ Si iOS affiche « Aucune connexion internet » sur le hotspot, c'est normal — le transfert est local, ignore l'avertissement.
+
+Dépendances ajoutées : NanoHTTPD (serveur HTTP, ~50 Ko) et ZXing core (QR code, sans la partie scan).
+
+## Utilisation Bluetooth (sur les 2 téléphones Android)
 
 1. Installe l'app sur les deux téléphones, ouvre-la, accepte les permissions, active le Bluetooth.
 2. Sur le récepteur : **Rendre visible** (et garder l'app ouverte).

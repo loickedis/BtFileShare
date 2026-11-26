@@ -10,4 +10,9 @@
     <string name="make_visible">Rendre visible</string>
     <string name="pick_file">Choisir un fichier à envoyer</string>
     <string name="devices_header">Appareils (tape un appareil pour envoyer)</string>
+    <string name="wifi_start">Wi-Fi / iPhone</string>
+    <string name="wifi_stop">Couper le Wi-Fi</string>
+    <string name="add_share">Ajouter au partage</string>
+    <string name="shared_none">Partage Wi-Fi : aucun fichier — ajoute-en avec « Ajouter au partage »</string>
+    <string name="shared_fmt">Partage Wi-Fi : %1$d fichier(s) en ligne</string>
 </resources>

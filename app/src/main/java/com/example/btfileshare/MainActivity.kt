@@ -7,11 +7,15 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.View
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +25,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,8 +42,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var progress: LinearProgressIndicator
     private lateinit var logText: TextView
     private lateinit var btnScan: MaterialButton
+    private lateinit var btnWifi: MaterialButton
+    private lateinit var sharedSummary: TextView
 
     private val devices = LinkedHashMap<String, DeviceInfo>()
+    private val sharedFiles = java.util.concurrent.ConcurrentHashMap<String, Uri>()
+    private var wifiServer: WifiShareServer? = null
     private var pendingFile: PendingFile? = null
     private var lastProgressUpdate = 0L
     private val uiScope = CoroutineScope(Dispatchers.Main)
@@ -67,6 +78,14 @@ class MainActivity : AppCompatActivity() {
             if (uri != null) onFilePicked(uri)
         }
 
+    private val pickShareLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            uris.forEach { uri ->
+                queryFileName(uri)?.let { name -> sharedFiles[name] = uri }
+            }
+            updateSharedSummary()
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -79,6 +98,9 @@ class MainActivity : AppCompatActivity() {
         btnScan = findViewById(R.id.btn_scan)
         val btnVisible = findViewById<MaterialButton>(R.id.btn_visible)
         val btnPick = findViewById<MaterialButton>(R.id.btn_pick)
+        btnWifi = findViewById(R.id.btn_wifi)
+        sharedSummary = findViewById(R.id.shared_summary)
+        val btnAddShare = findViewById<MaterialButton>(R.id.btn_add_share)
         val list = findViewById<RecyclerView>(R.id.devices_list)
 
         deviceAdapter = DeviceAdapter(::onDeviceClicked)
@@ -102,6 +124,8 @@ class MainActivity : AppCompatActivity() {
         btnScan.setOnClickListener { startScan() }
         btnVisible.setOnClickListener { makeVisible() }
         btnPick.setOnClickListener { pickFile() }
+        btnWifi.setOnClickListener { toggleWifi() }
+        btnAddShare.setOnClickListener { pickShareLauncher.launch(arrayOf("*/*")) }
 
         requestPermissions()
     }
@@ -110,6 +134,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         scanner.stop()
         transfer.stop()
+        wifiServer?.stop()
     }
 
     private fun requiredPermissions(): List<String> {
@@ -226,6 +251,83 @@ class MainActivity : AppCompatActivity() {
                 onFailure = { postStatus("❌ Échec vers ${device.displayName} : ${it.message ?: "erreur"}") }
             )
         }
+    }
+
+    private fun toggleWifi() {
+        val server = wifiServer
+        if (server != null) {
+            server.stop()
+            wifiServer = null
+            btnWifi.text = getString(R.string.wifi_start)
+            postStatus("Serveur Wi-Fi coupé")
+            return
+        }
+        val ip = WifiShareServer.primaryIp()
+        if (ip == null) {
+            Toast.makeText(this, "Active le Wi-Fi ou le point d'accès mobile d'abord", Toast.LENGTH_LONG).show()
+            return
+        }
+        val newServer = WifiShareServer(this, sharedFiles) { name ->
+            runOnUiThread {
+                log("Wi-Fi reçu $name → Téléchargements")
+                Toast.makeText(this, "Fichier reçu via Wi-Fi : $name", Toast.LENGTH_LONG).show()
+            }
+        }
+        try {
+            newServer.start()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Impossible de démarrer le serveur Wi-Fi : ${e.message}", Toast.LENGTH_LONG).show()
+            return
+        }
+        wifiServer = newServer
+        btnWifi.text = getString(R.string.wifi_stop)
+        val url = "http://$ip:${WifiShareServer.DEFAULT_PORT}"
+        postStatus("🌐 Serveur Wi-Fi actif : $url — l'iPhone scanne le QR code")
+        showQrDialog(url)
+    }
+
+    private fun showQrDialog(url: String) {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER
+            setPadding(48, 40, 48, 40)
+        }
+        val qr = qrBitmap(url, 620)
+        container.addView(ImageView(this).apply {
+            setImageBitmap(qr)
+            contentDescription = url
+        })
+        container.addView(TextView(this).apply {
+            text = url
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, 24, 0, 0)
+            textSize = 15f
+        })
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Ouvre ce lien sur l'autre téléphone")
+            .setView(container)
+            .setPositiveButton("Fermer", null)
+            .show()
+    }
+
+    private fun qrBitmap(content: String, size: Int): Bitmap? = try {
+        val hints = mapOf(EncodeHintType.MARGIN to 1)
+        val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, hints)
+        val pixels = IntArray(size * size)
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                pixels[y * size + x] = if (matrix[x, y]) Color.BLACK else Color.WHITE
+            }
+        }
+        Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { it.setPixels(pixels, 0, size, 0, 0, size, size) }
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun updateSharedSummary() {
+        val count = sharedFiles.size
+        sharedSummary.text = if (count == 0) getString(R.string.shared_none)
+        else getString(R.string.shared_fmt, count)
     }
 
     private fun queryFileName(uri: Uri): String? =
