@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">BtFileShare</string>
+    <string name="status_idle">Bluetooth prêt. Les deux téléphones doivent avoir l\'app ouverte.</string>
+    <string name="status_scanning">Scan en cours… (appareils autour détectés ci-dessous)</string>
+    <string name="status_scan_done">Scan terminé</string>
+    <string name="status_bt_disabled">Bluetooth désactivé. Réactive-le pour continuer.</string>
+    <string name="status_no_bt">Aucun Bluetooth sur cet appareil.</string>
+    <string name="status_permission_denied">Permissions Bluetooth requises pour utiliser l\'app.</string>
+    <string name="scan">Scanner</string>
+    <string name="make_visible">Rendre visible</string>
+    <string name="pick_file">Choisir un fichier à envoyer</string>
+    <string name="devices_header">Appareils (tape un appareil pour envoyer)</string>
+</resources>
